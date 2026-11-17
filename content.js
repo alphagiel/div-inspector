@@ -65,7 +65,28 @@
     .bm .t { top:1px; } .bm .bt { bottom:1px; }
     .bm .l, .bm .r { position:absolute; top:50%; transform:translateY(-50%); }
     .bm .l { left:4px; } .bm .r { right:4px; }
+    #toast {
+      position: fixed; top: 10px; right: 16px; transform: translateY(-8px);
+      display: flex; align-items: center; gap: 10px;
+      font: 500 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #333; background: #fff;
+      border: 1px solid #e3e3e3; border-radius: 8px; padding: 8px 8px 8px 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.22);
+      opacity: 0; transition: opacity .2s, transform .2s; white-space: nowrap;
+      pointer-events: auto;
+    }
+    #toast kbd {
+      font: 600 11px ui-monospace, Menlo, monospace;
+      background: #f2f2f2; border: 1px solid #ddd; border-radius: 3px; padding: 1px 4px;
+    }
+    #toast button {
+      all: unset; cursor: pointer; color: #999; font-size: 16px; line-height: 1;
+      padding: 2px 4px; border-radius: 4px;
+    }
+    #toast button:hover { color: #333; background: #f2f2f2; }
+    #toast.show { opacity: 1; transform: translateY(0); }
   </style>
+  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
   <div id="margin" class="layer"></div>
   <div id="padding" class="layer"></div>
   <div id="box" class="layer"></div>
@@ -321,7 +342,15 @@
     window.removeEventListener("resize", onScroll);
     host.remove();
     delete window.__divInspector;
+    try { chrome.runtime.sendMessage({ divInspector: false }); } catch {}
   }
+
+  const toast = root.getElementById("toast");
+  requestAnimationFrame(() => toast.classList.add("show"));
+  toast.querySelector("button").addEventListener("click", () => {
+    toast.classList.remove("show");
+    setTimeout(() => (toast.style.display = "none"), 200);
+  });
 
   window.__divInspector = { destroy };
 })();
