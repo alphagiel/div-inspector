@@ -6,9 +6,10 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 
 ![Div Inspector demo](docs/demo.gif)
 
-- The icon shows a green **ON** badge while the inspector is running on that tab.
+- The icon shows a blue **ON** badge while the inspector is running on that tab.
 - A small toast in the top-right lists the keys. Close it with **×**.
-- Hover any element to get a dashed green outline, plus margin (orange) and padding (green) overlays.
+- Hover any element to get a dashed blue outline, plus margin (orange) and padding (green) overlays.
+- If the element (or its parent) is a CSS grid, its cells show as purple dashed boxes and the label shows the grid size (e.g. `grid 3×2`).
 - A small label shows the tag, classes, size, and the React/Vue component name.
 - Press **S** for a docked details panel: box model, spacing, size, font, colors, border, layout, effects.
 - Press **S** again to hide it.

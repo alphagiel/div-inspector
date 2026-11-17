@@ -23,8 +23,8 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 function setBadge(tabId, on) {
   chrome.action.setBadgeText({ tabId, text: on ? "ON" : "" });
-  if (on) chrome.action.setBadgeBackgroundColor({ tabId, color: "#39ff14" });
-  if (on) chrome.action.setBadgeTextColor?.({ tabId, color: "#000" });
+  if (on) chrome.action.setBadgeBackgroundColor({ tabId, color: "#2563eb" });
+  if (on) chrome.action.setBadgeTextColor?.({ tabId, color: "#fff" });
 }
 
 // Esc from the page turns it off
