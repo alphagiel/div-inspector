@@ -5,7 +5,7 @@
     return;
   }
 
-  const NEON = "#39ff14";
+  const ACCENT = "#2563eb";
   const host = document.createElement("div");
   host.style.cssText = "all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647;";
   const root = host.attachShadow({ mode: "open" });
@@ -17,21 +17,26 @@
     .layer { position: fixed; pointer-events: none; display: none; }
     #margin  { background: rgba(255,155,0,.22); }
     #padding { background: rgba(0,200,120,.22); }
+    #grid { position: fixed; inset: 0; pointer-events: none; display: none; }
+    #grid div {
+      position: fixed; pointer-events: none;
+      border: 1px dashed #a855f7; background: rgba(168,85,247,.08);
+    }
     #box {
-      border: 1.5px dashed ${NEON};
+      border: 2px dashed ${ACCENT};
     }
     #chip {
       position: fixed; pointer-events: none; display: none;
       font: 600 11px/1 ui-monospace, Menlo, monospace;
-      color: #000; background: ${NEON};
+      color: #fff; background: ${ACCENT};
       padding: 3px 5px; border-radius: 3px; white-space: nowrap;
       max-width: 60vw; overflow: hidden; text-overflow: ellipsis;
     }
     #hint {
       position: fixed; pointer-events: none; display: none;
-      font: 500 10px/1 ui-monospace, Menlo, monospace;
-      color: ${NEON}; background: rgba(0,0,0,.75);
-      border: 1px dashed ${NEON};
+      font: 600 10px/1 ui-monospace, Menlo, monospace;
+      color: #fff; background: ${ACCENT};
+      border: 1px dashed ${ACCENT};
       padding: 3px 5px; border-radius: 3px; white-space: nowrap;
     }
     #panel {
@@ -39,12 +44,12 @@
       max-height: calc(100vh - 24px); overflow: auto;
       pointer-events: auto; display: none;
       background: #0d0f12; color: #e6e6e6;
-      border: 1px solid ${NEON}; border-radius: 8px;
-      box-shadow: 0 0 18px rgba(57,255,20,.35);
+      border: 1px solid ${ACCENT}; border-radius: 8px;
+      box-shadow: 0 0 18px rgba(37,99,235,.4);
       font: 12px/1.45 ui-monospace, Menlo, monospace;
     }
     #panel.left { right: auto; left: 12px; }
-    .hd { padding: 10px 12px; border-bottom: 1px solid #222; color: ${NEON}; font-weight: 700; word-break: break-all; }
+    .hd { padding: 10px 12px; border-bottom: 1px solid #222; color: ${ACCENT}; font-weight: 700; word-break: break-all; }
     .hd small { display:block; color:#888; font-weight:400; margin-top:2px; }
     .sec { padding: 8px 12px; border-bottom: 1px solid #1c1c1c; }
     .sec h4 { margin: 0 0 6px; font-size: 11px; color: #9aa; text-transform: uppercase; letter-spacing: .06em; }
@@ -87,6 +92,7 @@
     #toast.show { opacity: 1; transform: translateY(0); }
   </style>
   <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="grid"></div>
   <div id="margin" class="layer"></div>
   <div id="padding" class="layer"></div>
   <div id="box" class="layer"></div>
@@ -96,7 +102,7 @@
   `;
 
   const $ = (id) => root.getElementById(id);
-  const mLayer = $("margin"), pLayer = $("padding"), box = $("box"), chip = $("chip"), hint = $("hint"), panel = $("panel");
+  const mLayer = $("margin"), pLayer = $("padding"), box = $("box"), chip = $("chip"), hint = $("hint"), panel = $("panel"), gridLayer = $("grid");
 
   let target = null;
   let locked = false; // true while details panel is open
@@ -134,8 +140,49 @@
     return compNames;
   };
 
+  // Grid overlay: the hovered element if it's a grid, else its parent if that is
+  const gridOf = (el) => {
+    for (const e of [el, el.parentElement]) {
+      if (e && getComputedStyle(e).display.includes("grid")) return e;
+    }
+    return null;
+  };
+  // computed grid-template-* resolves to px track sizes; strip [line-names]
+  const tracks = (s) => s.replace(/\[[^\]]*\]/g, " ").trim().split(/\s+/).map(parseFloat).filter((n) => !isNaN(n));
+
+  function drawGrid(g) {
+    if (!g) {
+      gridLayer.style.display = "none";
+      return "";
+    }
+    const r = g.getBoundingClientRect();
+    const cs = getComputedStyle(g);
+    const x0 = r.left + px(cs.borderLeftWidth) + px(cs.paddingLeft);
+    const y0 = r.top + px(cs.borderTopWidth) + px(cs.paddingTop);
+    const innerW = r.width - px(cs.borderLeftWidth) - px(cs.borderRightWidth) - px(cs.paddingLeft) - px(cs.paddingRight);
+    const innerH = r.height - px(cs.borderTopWidth) - px(cs.borderBottomWidth) - px(cs.paddingTop) - px(cs.paddingBottom);
+    const cols = tracks(cs.gridTemplateColumns);
+    const rws = tracks(cs.gridTemplateRows);
+    if (!cols.length) cols.push(innerW);
+    if (!rws.length) rws.push(innerH);
+    const cg = px(cs.columnGap), rg = px(cs.rowGap);
+    let html = "", y = y0;
+    for (const h of rws) {
+      let x = x0;
+      for (const w of cols) {
+        html += `<div style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"></div>`;
+        x += w + cg;
+      }
+      y += h + rg;
+    }
+    gridLayer.innerHTML = html;
+    gridLayer.style.display = "block";
+    return `grid ${cols.length}×${rws.length}`;
+  }
+
   function draw() {
     if (!target || !target.isConnected) return hide();
+    const gridInfo = drawGrid(gridOf(target));
     const r = target.getBoundingClientRect();
     const cs = getComputedStyle(target);
     const m = { t: px(cs.marginTop), r: px(cs.marginRight), b: px(cs.marginBottom), l: px(cs.marginLeft) };
@@ -154,7 +201,7 @@
     place(box, { left: r.left - 0.75, top: r.top - 0.75, width: r.width + 1.5, height: r.height + 1.5 });
 
     const comp = componentOf(target).split(" ‹ ")[0];
-    chip.textContent = `${comp ? `<${comp}> ` : ""}${label(target)}  ${Math.round(r.width)}×${Math.round(r.height)}`;
+    chip.textContent = `${comp ? `<${comp}> ` : ""}${label(target)}  ${Math.round(r.width)}×${Math.round(r.height)}${gridInfo ? `  · ${gridInfo}` : ""}`;
     chip.style.display = "block";
     const ch2 = 18;
     const top = r.top - ch2 - 4 >= 0 ? r.top - ch2 - 4 : Math.min(r.bottom + 4, innerHeight - ch2);
@@ -172,7 +219,7 @@
   }
 
   function hide() {
-    [mLayer, pLayer, box, chip, hint].forEach((e) => (e.style.display = "none"));
+    [mLayer, pLayer, box, chip, hint, gridLayer].forEach((e) => (e.style.display = "none"));
   }
 
   const four = (cs, prop) => {
