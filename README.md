@@ -4,6 +4,8 @@
 
 A Chrome extension for inspecting elements without a giant tooltip following your cursor around.
 
+![Div Inspector demo](docs/demo.gif)
+
 - Hover any element to get a dashed green outline, plus margin (orange) and padding (green) overlays.
 - A small label shows the tag, classes, size, and the React/Vue component name.
 - Press **S** for a docked details panel: box model, spacing, size, font, colors, border, layout, effects.
