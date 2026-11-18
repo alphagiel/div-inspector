@@ -98,8 +98,31 @@
       opacity: 0; transition: opacity .2s; pointer-events: none;
     }
     #flash.show { opacity: 1; }
+    .ask { padding: 10px 12px; background: #fff; color: #1f2328; border-bottom: 1px solid ${ACCENT}; }
+    .ask h4 { margin: 0 0 6px; font-size: 11px; color: ${ACCENT}; text-transform: uppercase; letter-spacing: .06em; display:flex; justify-content:space-between; align-items:center; }
+    .ask select {
+      all: unset; font: 10px ui-monospace, Menlo, monospace; color: #57606a; cursor: pointer;
+      max-width: 160px; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0;
+    }
+    .ask form { display: flex; gap: 6px; }
+    .ask input {
+      flex: 1; min-width: 0; font: 12px ui-monospace, Menlo, monospace; color: #1f2328;
+      background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 5px; padding: 6px 8px; outline: none;
+    }
+    .ask input:focus { border-color: ${ACCENT}; }
+    .ask button {
+      all: unset; cursor: pointer; font: 600 11px ui-monospace, Menlo, monospace;
+      color: #fff; background: ${ACCENT}; border-radius: 5px; padding: 6px 10px;
+    }
+    .ask button:disabled { opacity: .5; cursor: default; }
+    .ans { margin-top: 8px; white-space: pre-wrap; word-break: break-word; color: #1f2328; }
+    .ans:empty { display: none; }
+    .ans pre { white-space: pre-wrap; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 5px; padding: 6px 8px; margin: 6px 0; color: #0b3d91; }
+    .ans code { color: #0b3d91; background: #eef2f7; border-radius: 3px; padding: 0 3px; }
+    .ans pre code { background: none; padding: 0; }
+    .ans.err { color: #c62828; }
   </style>
-  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>C</kbd> copy for AI · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
   <div id="grid"></div>
   <div id="margin" class="layer"></div>
   <div id="padding" class="layer"></div>
@@ -283,7 +306,12 @@
     const isGrid = cs.display.includes("grid");
 
     panel.innerHTML = `
-      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · C copy for AI · Esc quit</small></div>
+      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · A ask AI · C copy for AI · Esc quit</small></div>
+      <div class="ask">
+        <h4><span>Ask AI (Ollama)</span><select title="Ollama model"><option>loading…</option></select></h4>
+        <form><input placeholder="why is this misaligned?" autocomplete="off"><button type="submit">Ask</button></form>
+        <div class="ans"></div>
+      </div>
       <div class="sec"><h4>Box model</h4>${bm}</div>
       ${sec("Spacing", rows([
         ["margin", four(cs, "margin"), true],
@@ -336,11 +364,92 @@
         ["filter", cs.filter],
         ["cursor", cs.cursor],
       ]))}
-      <div class="ft">Div Inspector · hover = highlight · S = details · C = copy for AI</div>`;
+      <div class="ft">Div Inspector · hover = highlight · S = details · A = ask AI · C = copy</div>`;
 
     // dock opposite the element so it doesn't cover it
     panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
     panel.style.display = "block";
+    wireAsk();
+  }
+
+  // --- ask AI (local Ollama via background) ---
+  let askPort = null;
+  const stopAsk = () => {
+    try { askPort?.disconnect(); } catch {}
+    askPort = null;
+  };
+
+  // minimal markdown: ```fences``` -> <pre>, `inline` -> <code>
+  const md = (t) =>
+    esc(t)
+      .replace(/```[\w-]*\n?([\s\S]*?)(```|$)/g, (_, c) => `<pre>${c.replace(/\n$/, "")}</pre>`)
+      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+
+  function wireAsk() {
+    const form = panel.querySelector(".ask form");
+    const input = form.querySelector("input");
+    const btn = form.querySelector("button");
+    const ans = panel.querySelector(".ans");
+    const sel = panel.querySelector(".ask select");
+
+    chrome.runtime.sendMessage({ diOllama: "models" }, (res) => {
+      if (chrome.runtime.lastError || !res) {
+        sel.innerHTML = `<option>offline</option>`;
+        ans.className = "ans err";
+        ans.textContent = "Extension background didn't answer. Reload Div Inspector in chrome://extensions, then refresh this page.";
+        return;
+      }
+      if (res.error) {
+        sel.innerHTML = `<option>offline</option>`;
+        ans.className = "ans err";
+        ans.textContent = res.error;
+        return;
+      }
+      sel.innerHTML = res.models.map((m) => `<option ${m === res.model ? "selected" : ""}>${esc(m)}</option>`).join("") || `<option>no models</option>`;
+    });
+    sel.addEventListener("change", () => chrome.runtime.sendMessage({ diOllama: "setModel", model: sel.value }));
+
+    // keep page shortcuts from eating keystrokes typed in the box
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Escape") input.blur();
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q || !target) return;
+      stopAsk();
+      ans.className = "ans";
+      ans.textContent = "thinking…";
+      btn.disabled = true;
+      let text = "", finished = false;
+      const port = (askPort = chrome.runtime.connect({ name: "di-ollama" }));
+      port.onMessage.addListener((m) => {
+        if (m.delta) {
+          text += m.delta;
+          ans.innerHTML = md(text);
+        }
+        if (m.error) {
+          ans.className = "ans err";
+          ans.textContent = m.error;
+        }
+        if (m.done || m.error) {
+          finished = true;
+          btn.disabled = false;
+          stopAsk();
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        btn.disabled = false;
+        if (!finished && askPort === port) {
+          ans.className = "ans err";
+          ans.textContent = "Lost connection to the extension background. Reload Div Inspector in chrome://extensions, then refresh this page.";
+        }
+      });
+      port.postMessage({ model: sel.value, context: aiContext(target), question: q });
+    });
   }
 
   // --- copy for AI ---
@@ -461,23 +570,24 @@
     }
   };
 
-  const typing = () => {
-    const a = document.activeElement;
+  const typing = (e) => {
+    const a = e.composedPath()[0] || document.activeElement;
     return a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
   };
 
   const onKey = (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (typing(e)) return;
     if (e.key === "Escape") {
       e.preventDefault();
       return destroy();
     }
-    if (typing()) return;
     if (e.key === "s" || e.key === "S") {
       e.preventDefault();
       e.stopPropagation();
       if (locked) {
         locked = false;
+        stopAsk();
         panel.style.display = "none";
       } else if (target) {
         locked = true;
@@ -488,6 +598,15 @@
       e.preventDefault();
       e.stopPropagation();
       copyText(aiContext(target)).then((ok) => showFlash(ok ? "✓ Copied for AI" : "Copy failed"));
+    } else if ((e.key === "a" || e.key === "A") && target) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!locked) {
+        locked = true;
+        renderPanel();
+        draw();
+      }
+      panel.querySelector(".ask input")?.focus();
     }
   };
 
@@ -505,6 +624,7 @@
     document.removeEventListener("keydown", onKey, true);
     window.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onScroll);
+    stopAsk();
     host.remove();
     delete window.__divInspector;
     try { chrome.runtime.sendMessage({ divInspector: false }); } catch {}
