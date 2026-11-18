@@ -30,8 +30,17 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 | Click icon / `Alt+Shift+D` | Toggle on/off |
 | Hover | Highlight element |
 | `S` | Show/hide details for the hovered element (locks it) |
+| `A` | Ask a local AI (Ollama) about the hovered element |
 | `C` | Copy the hovered element as an AI-ready prompt |
 | `Esc` | Turn off |
+
+## Ask AI (Ollama, free + local)
+
+Press **A** on an element (or use the box at the top of the **S** panel) to ask a question about it. Answers stream in from [Ollama](https://ollama.com) on your machine. Nothing leaves your computer.
+
+1. Install Ollama and run `ollama serve`.
+2. Pull a model: `ollama pull qwen2.5-coder:7b` (the default). Any installed model works. Pick it from the dropdown.
+3. If you get a 403, restart with `OLLAMA_ORIGINS="chrome-extension://*" ollama serve`.
 
 ## Notes
 
