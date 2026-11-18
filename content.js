@@ -90,8 +90,16 @@
     }
     #toast button:hover { color: #333; background: #f2f2f2; }
     #toast.show { opacity: 1; transform: translateY(0); }
+    #flash {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      font: 600 12px/1 ui-monospace, Menlo, monospace;
+      color: #fff; background: ${ACCENT}; padding: 7px 10px; border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.25);
+      opacity: 0; transition: opacity .2s; pointer-events: none;
+    }
+    #flash.show { opacity: 1; }
   </style>
-  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>C</kbd> copy for AI · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
   <div id="grid"></div>
   <div id="margin" class="layer"></div>
   <div id="padding" class="layer"></div>
@@ -99,6 +107,7 @@
   <div id="chip"></div>
   <div id="hint">press S for details</div>
   <div id="panel"></div>
+  <div id="flash"></div>
   `;
 
   const $ = (id) => root.getElementById(id);
@@ -274,7 +283,7 @@
     const isGrid = cs.display.includes("grid");
 
     panel.innerHTML = `
-      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · Esc quit</small></div>
+      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · C copy for AI · Esc quit</small></div>
       <div class="sec"><h4>Box model</h4>${bm}</div>
       ${sec("Spacing", rows([
         ["margin", four(cs, "margin"), true],
@@ -327,12 +336,117 @@
         ["filter", cs.filter],
         ["cursor", cs.cursor],
       ]))}
-      <div class="ft">Div Inspector · hover = highlight · S = details</div>`;
+      <div class="ft">Div Inspector · hover = highlight · S = details · C = copy for AI</div>`;
 
     // dock opposite the element so it doesn't cover it
     panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
     panel.style.display = "block";
   }
+
+  // --- copy for AI ---
+  const selectorOf = (el) => {
+    const parts = [];
+    for (let e = el; e && e.nodeType === 1 && e !== document.documentElement; e = e.parentElement) {
+      if (e.id && !/\d{3,}|:/.test(e.id)) {
+        parts.unshift("#" + CSS.escape(e.id));
+        break;
+      }
+      let s = e.tagName.toLowerCase();
+      const p = e.parentElement;
+      if (p) {
+        const sibs = [...p.children].filter((c) => c.tagName === e.tagName);
+        if (sibs.length > 1) s += `:nth-of-type(${sibs.indexOf(e) + 1})`;
+      }
+      parts.unshift(s);
+      if (e === document.body) break;
+    }
+    return parts.join(" > ");
+  };
+
+  const htmlSnippet = (el, max = 1500) => {
+    const html = el.outerHTML.replace(/\s+/g, " ");
+    if (html.length <= max) return html;
+    const open = el.cloneNode(false).outerHTML;
+    const close = `</${el.tagName.toLowerCase()}>`;
+    const inner = el.innerHTML.replace(/\s+/g, " ");
+    const room = Math.max(0, max - open.length - close.length);
+    return open.replace(close, "") + inner.slice(0, room) + " …(truncated)… " + close;
+  };
+
+  const DEFAULTS = new Set(["", "none", "normal", "auto", "0px", "0s", "visible", "static", "rgba(0, 0, 0, 0)", "0px 0px", "0px 0px 0px 0px"]);
+  const STYLE_PROPS = [
+    "display", "position", "top", "right", "bottom", "left", "z-index",
+    "width", "height", "min-width", "max-width", "min-height", "max-height", "box-sizing",
+    "margin", "padding", "gap",
+    "flex-direction", "flex-wrap", "justify-content", "align-items", "align-self", "flex",
+    "grid-template-columns", "grid-template-rows", "grid-column", "grid-row",
+    "font-family", "font-size", "font-weight", "line-height", "letter-spacing", "text-align", "color",
+    "background-color", "background-image", "border", "border-radius", "box-shadow", "opacity",
+    "overflow", "transform", "transition", "cursor",
+  ];
+  const styleLines = (el) => {
+    const cs = getComputedStyle(el);
+    return STYLE_PROPS.map((k) => [k, cs.getPropertyValue(k)])
+      .filter(([k, v]) => !DEFAULTS.has(v) && !(k === "flex" && v === "0 1 auto") && !(k === "opacity" && v === "1") && !(k === "border" && /^0px/.test(v)))
+      .map(([k, v]) => `  ${k}: ${v};`)
+      .join("\n");
+  };
+
+  function aiContext(el) {
+    const r = el.getBoundingClientRect();
+    const comp = componentOf(el);
+    const parent = el.parentElement;
+    const pcs = parent && getComputedStyle(parent);
+    const text = (el.innerText || "").trim().replace(/\s+/g, " ").slice(0, 200);
+    const out = [
+      "## Element from Div Inspector",
+      `Page: ${location.href}`,
+      `Selector: ${selectorOf(el)}`,
+      comp ? `Component chain (inner ‹ outer): ${comp}` : null,
+      `Rendered size: ${Math.round(r.width)}×${Math.round(r.height)} at (${Math.round(r.left)}, ${Math.round(r.top)}) · viewport ${innerWidth}×${innerHeight}`,
+      parent ? `Parent: ${label(parent)} (display: ${pcs.display}${pcs.display.includes("flex") ? `, flex-direction: ${pcs.flexDirection}` : ""}${pcs.gap !== "normal" ? `, gap: ${pcs.gap}` : ""})` : null,
+      text ? `Text: "${text}"` : null,
+      "",
+      "### Computed styles (non-default)",
+      "```css",
+      `${selectorOf(el).split(" > ").pop()} {`,
+      styleLines(el),
+      "}",
+      "```",
+      "",
+      "### HTML",
+      "```html",
+      htmlSnippet(el),
+      "```",
+    ];
+    return out.filter((x) => x !== null).join("\n");
+  }
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;top:-9999px;opacity:0;";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch {}
+      ta.remove();
+      return ok;
+    }
+  };
+
+  const flash = $("flash");
+  let flashTimer;
+  const showFlash = (msg) => {
+    flash.textContent = msg;
+    flash.classList.add("show");
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => flash.classList.remove("show"), 1400);
+  };
 
   // --- events ---
   const isOurs = (e) => e.composedPath().includes(host);
@@ -370,6 +484,10 @@
         renderPanel();
       }
       if (target) draw();
+    } else if ((e.key === "c" || e.key === "C") && target) {
+      e.preventDefault();
+      e.stopPropagation();
+      copyText(aiContext(target)).then((ok) => showFlash(ok ? "✓ Copied for AI" : "Copy failed"));
     }
   };
 

@@ -13,6 +13,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 - A small label shows the tag, classes, size, and the React/Vue component name.
 - Press **S** for a docked details panel: box model, spacing, size, font, colors, border, layout, effects.
 - Press **S** again to hide it.
+- Press **C** to copy the hovered element for AI: selector, component chain, size, parent layout, non-default computed styles, and an HTML snippet as Markdown. Paste it into Claude/ChatGPT and ask for a fix.
 - Press **Esc** to turn the inspector off.
 
 ## Install
@@ -29,6 +30,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 | Click icon / `Alt+Shift+D` | Toggle on/off |
 | Hover | Highlight element |
 | `S` | Show/hide details for the hovered element (locks it) |
+| `C` | Copy the hovered element as an AI-ready prompt |
 | `Esc` | Turn off |
 
 ## Notes
