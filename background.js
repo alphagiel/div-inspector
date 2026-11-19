@@ -42,7 +42,7 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 // --- Ollama (local AI) ---
 const OLLAMA = "http://localhost:11434";
 const DEFAULT_MODEL = "qwen2.5-coder:7b";
-const SYSTEM = `You are a senior front-end engineer. The user is inspecting one element on a live web page with a dev tool. You get its selector, component chain, computed styles, and HTML. Answer the question directly and briefly. Prefer concrete CSS/HTML fixes in code blocks. Don't restate the context.`;
+const SYSTEM = `You are a senior front-end engineer. The user is inspecting one element on a live web page with a dev tool. You get its selector, component chain, computed styles, and HTML. Answer the question directly and briefly. Prefer concrete CSS/HTML fixes in code blocks. Put CSS fixes in \`\`\`css blocks using the inspected element's selector (or a real parent/child selector from the HTML) so they can be live-previewed on the page. Don't restate the context.`;
 
 const ollamaError = (status) =>
   status === 403
