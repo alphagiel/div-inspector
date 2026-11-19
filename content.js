@@ -51,6 +51,15 @@
     #panel.left { right: auto; left: 12px; }
     .hd { padding: 10px 12px; border-bottom: 1px solid #222; color: ${ACCENT}; font-weight: 700; word-break: break-all; cursor: grab; user-select: none; }
     #panel.dragging .hd { cursor: grabbing; }
+    .hd { position: relative; padding-right: 36px; }
+    .hd .min {
+      all: unset; position: absolute; top: 6px; right: 6px; cursor: pointer;
+      width: 22px; height: 22px; text-align: center; line-height: 20px;
+      color: #9aa; font: 700 14px ui-monospace, Menlo, monospace; border-radius: 4px;
+    }
+    .hd .min:hover { color: #fff; background: #222; }
+    #panel.minimized > :not(.hd) { display: none; }
+    #panel.minimized .hd { border-bottom: 0; }
     .hd small { display:block; color:#888; font-weight:400; margin-top:2px; }
     .sec { padding: 8px 12px; border-bottom: 1px solid #1c1c1c; }
     .sec h4 { margin: 0 0 6px; font-size: 11px; color: #9aa; text-transform: uppercase; letter-spacing: .06em; }
@@ -312,7 +321,7 @@
     const isGrid = cs.display.includes("grid");
 
     panel.innerHTML = `
-      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · A ask AI · C copy for AI · Esc quit</small></div>
+      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · A ask AI · C copy for AI · Esc quit</small><button class="min" title="Minimize">${minimized ? "▢" : "—"}</button></div>
       <div class="ask">
         <h4><span>Ask AI (Ollama)</span><select title="Ollama model"><option>loading…</option></select></h4>
         <form><input placeholder="why is this misaligned?" autocomplete="off"><button type="submit">Ask</button></form>
@@ -378,11 +387,24 @@
     if (dragPos) placePanel(dragPos.x, dragPos.y);
     else panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
     wireDrag();
+    setMinimized(minimized);
     wireAsk();
   }
 
   // --- drag the panel by its header; double-click header to re-dock ---
   let dragPos = null; // {x, y} once moved, kept for the session
+  let minimized = false; // collapsed to just the header, kept for the session
+
+  const setMinimized = (on) => {
+    minimized = on;
+    panel.classList.toggle("minimized", on);
+    const b = panel.querySelector(".hd .min");
+    if (b) {
+      b.textContent = on ? "▢" : "—";
+      b.title = on ? "Expand" : "Minimize";
+    }
+    if (dragPos) placePanel(dragPos.x, dragPos.y);
+  };
 
   const placePanel = (x, y) => {
     const w = panel.offsetWidth, h = panel.offsetHeight;
@@ -396,8 +418,9 @@
 
   function wireDrag() {
     const hd = panel.querySelector(".hd");
+    hd.querySelector(".min").addEventListener("click", () => setMinimized(!minimized));
     hd.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || e.target.closest(".min")) return;
       e.preventDefault();
       const r = panel.getBoundingClientRect();
       const dx = e.clientX - r.left, dy = e.clientY - r.top;
@@ -414,7 +437,8 @@
       hd.addEventListener("pointerup", up);
       hd.addEventListener("pointercancel", up);
     });
-    hd.addEventListener("dblclick", () => {
+    hd.addEventListener("dblclick", (e) => {
+      if (e.target.closest(".min")) return;
       dragPos = null;
       Object.assign(panel.style, { left: "", top: "", right: "" });
       const r = target?.getBoundingClientRect();
@@ -742,6 +766,7 @@
         renderPanel();
         draw();
       }
+      setMinimized(false);
       panel.querySelector(".ask input")?.focus();
     }
   };

@@ -13,6 +13,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 - A small label shows the tag, classes, size, and the React/Vue component name.
 - Press **S** for a docked details panel: box model, spacing, size, font, colors, border, layout, effects.
 - Drag the panel by its dark header to move it out of the way. It stays put until you double-click the header to re-dock it.
+- Click **—** in the header to minimize the panel to just its header. Click **▢** to expand it. **A** expands it too.
 - Press **S** again to hide it.
 - Press **C** to copy the hovered element for AI: selector, component chain, size, parent layout, non-default computed styles, and an HTML snippet as Markdown. Paste it into Claude/ChatGPT and ask for a fix.
 - Press **Esc** to turn the inspector off.
@@ -44,6 +45,8 @@ Press **A** on an element (or use the box at the top of the **S** panel) to ask 
 3. If you get a 403, restart with `OLLAMA_ORIGINS="chrome-extension://*" ollama serve`.
 
 ### Preview suggestions live
+
+![Ask AI and live preview demo](docs/ai-preview.gif)
 
 - When an answer finishes, every CSS code block gets a **▶ Preview** button.
 - Click it to apply that CSS to the page right away. Click **↺ Revert** to undo.
