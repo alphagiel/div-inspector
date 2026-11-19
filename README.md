@@ -30,7 +30,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 | Click icon / `Alt+Shift+D` | Toggle on/off |
 | Hover | Highlight element |
 | `S` | Show/hide details for the hovered element (locks it) |
-| `A` | Ask a local AI (Ollama) about the hovered element |
+| `A` | Ask a local AI (Ollama) about the hovered element, then live-preview its CSS fixes |
 | `C` | Copy the hovered element as an AI-ready prompt |
 | `Esc` | Turn off |
 
@@ -41,6 +41,14 @@ Press **A** on an element (or use the box at the top of the **S** panel) to ask 
 1. Install Ollama and run `ollama serve`.
 2. Pull a model: `ollama pull qwen2.5-coder:7b` (the default). Any installed model works. Pick it from the dropdown.
 3. If you get a 403, restart with `OLLAMA_ORIGINS="chrome-extension://*" ollama serve`.
+
+### Preview suggestions live
+
+- When an answer finishes, every CSS code block gets a **▶ Preview** button.
+- Click it to apply that CSS to the page right away. Click **↺ Revert** to undo.
+- Rules land on whatever their selector matches (the element, a parent, or its children). Bare declarations go on the inspected element.
+- Previews revert when you close the panel, ask a new question, or press **Esc**.
+- CSS only. HTML suggestions can't be previewed.
 
 ## Notes
 

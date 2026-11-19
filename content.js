@@ -121,6 +121,11 @@
     .ans code { color: #0b3d91; background: #eef2f7; border-radius: 3px; padding: 0 3px; }
     .ans pre code { background: none; padding: 0; }
     .ans.err { color: #c62828; }
+    .ask .ans .pv {
+      display: inline-block; margin: 6px 0 -2px; padding: 3px 8px;
+      font: 600 10px ui-monospace, Menlo, monospace; border-radius: 4px;
+    }
+    .ask .ans .pv.on { background: #16a34a; }
   </style>
   <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
   <div id="grid"></div>
@@ -421,6 +426,7 @@
       const q = input.value.trim();
       if (!q || !target) return;
       stopAsk();
+      revertAll();
       ans.className = "ans";
       ans.textContent = "thinking…";
       btn.disabled = true;
@@ -435,6 +441,7 @@
           ans.className = "ans err";
           ans.textContent = m.error;
         }
+        if (m.done && !m.error) addPreviewButtons(ans);
         if (m.done || m.error) {
           finished = true;
           btn.disabled = false;
@@ -449,6 +456,89 @@
         }
       });
       port.postMessage({ model: sel.value, context: aiContext(target), question: q });
+    });
+  }
+
+  // --- live-preview AI CSS on the page ---
+  const previews = new Map(); // element -> original style attr (null = had none)
+
+  function revertAll() {
+    for (const [el, orig] of previews) orig === null ? el.removeAttribute("style") : el.setAttribute("style", orig);
+    previews.clear();
+    panel.querySelectorAll(".ans .pv").forEach((b) => {
+      b.textContent = "▶ Preview";
+      b.classList.remove("on");
+    });
+    if (target) draw();
+  }
+
+  // "sel { a: b; }" blocks, or bare "a: b;" lines -> [{ sel, decls: [[prop, val]] }]
+  const parseCss = (code) => {
+    const clean = code.replace(/\/\*[\s\S]*?\*\//g, "");
+    const blocks = [];
+    const re = /([^{}]*)\{([^{}]*)\}/g;
+    let m;
+    while ((m = re.exec(clean))) blocks.push({ sel: m[1].trim(), body: m[2] });
+    if (!blocks.length) blocks.push({ sel: "", body: clean });
+    return blocks
+      .map(({ sel, body }) => ({
+        sel,
+        decls: body
+          .split(";")
+          .map((d) => {
+            const i = d.indexOf(":");
+            if (i < 1) return null;
+            const p = d.slice(0, i).trim();
+            const v = d.slice(i + 1).trim().replace(/\s*!important$/i, "");
+            return /^-?[a-z][a-z-]*$/i.test(p) && v ? [p, v] : null;
+          })
+          .filter(Boolean),
+      }))
+      .filter((b) => b.decls.length && !b.sel.includes("::") && !b.sel.startsWith("@"));
+  };
+
+  // Where does a rule go? target itself, an ancestor, descendants, a unique page match, else target
+  const elsFor = (sel) => {
+    if (!sel) return [target];
+    try {
+      if (target.matches(sel)) return [target];
+      const up = target.parentElement?.closest(sel);
+      if (up) return [up];
+      const down = target.querySelectorAll(sel);
+      if (down.length) return [...down];
+      const all = document.querySelectorAll(sel);
+      if (all.length === 1) return [all[0]];
+    } catch {}
+    return [target];
+  };
+
+  function applyCss(code) {
+    for (const { sel, decls } of parseCss(code)) {
+      for (const el of elsFor(sel)) {
+        if (!previews.has(el)) previews.set(el, el.getAttribute("style"));
+        for (const [p, v] of decls) el.style.setProperty(p, v, "important");
+      }
+    }
+    if (target) draw();
+  }
+
+  function addPreviewButtons(ans) {
+    ans.querySelectorAll("pre").forEach((pre) => {
+      const code = pre.textContent;
+      if (!parseCss(code).length) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pv";
+      btn.textContent = "▶ Preview";
+      btn.addEventListener("click", () => {
+        if (btn.classList.contains("on")) return revertAll();
+        revertAll(); // one suggestion at a time
+        applyCss(code);
+        btn.textContent = "↺ Revert";
+        btn.classList.add("on");
+        showFlash("Previewing · close panel to revert");
+      });
+      pre.before(btn);
     });
   }
 
@@ -588,6 +678,7 @@
       if (locked) {
         locked = false;
         stopAsk();
+        revertAll();
         panel.style.display = "none";
       } else if (target) {
         locked = true;
@@ -625,6 +716,7 @@
     window.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onScroll);
     stopAsk();
+    revertAll();
     host.remove();
     delete window.__divInspector;
     try { chrome.runtime.sendMessage({ divInspector: false }); } catch {}
