@@ -49,7 +49,8 @@
       font: 12px/1.45 ui-monospace, Menlo, monospace;
     }
     #panel.left { right: auto; left: 12px; }
-    .hd { padding: 10px 12px; border-bottom: 1px solid #222; color: ${ACCENT}; font-weight: 700; word-break: break-all; }
+    .hd { padding: 10px 12px; border-bottom: 1px solid #222; color: ${ACCENT}; font-weight: 700; word-break: break-all; cursor: grab; user-select: none; }
+    #panel.dragging .hd { cursor: grabbing; }
     .hd small { display:block; color:#888; font-weight:400; margin-top:2px; }
     .sec { padding: 8px 12px; border-bottom: 1px solid #1c1c1c; }
     .sec h4 { margin: 0 0 6px; font-size: 11px; color: #9aa; text-transform: uppercase; letter-spacing: .06em; }
@@ -372,9 +373,53 @@
       <div class="ft">Div Inspector · hover = highlight · S = details · A = ask AI · C = copy</div>`;
 
     // dock opposite the element so it doesn't cover it
-    panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
     panel.style.display = "block";
+    // unless the user dragged it somewhere
+    if (dragPos) placePanel(dragPos.x, dragPos.y);
+    else panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
+    wireDrag();
     wireAsk();
+  }
+
+  // --- drag the panel by its header; double-click header to re-dock ---
+  let dragPos = null; // {x, y} once moved, kept for the session
+
+  const placePanel = (x, y) => {
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    // keep at least the header on screen
+    x = Math.min(Math.max(0, x), innerWidth - w);
+    y = Math.min(Math.max(0, y), innerHeight - 40);
+    Object.assign(panel.style, { left: x + "px", top: y + "px", right: "auto" });
+    panel.classList.remove("left");
+    dragPos = { x, y };
+  };
+
+  function wireDrag() {
+    const hd = panel.querySelector(".hd");
+    hd.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const r = panel.getBoundingClientRect();
+      const dx = e.clientX - r.left, dy = e.clientY - r.top;
+      hd.setPointerCapture(e.pointerId);
+      panel.classList.add("dragging");
+      const move = (ev) => placePanel(ev.clientX - dx, ev.clientY - dy);
+      const up = () => {
+        panel.classList.remove("dragging");
+        hd.removeEventListener("pointermove", move);
+        hd.removeEventListener("pointerup", up);
+        hd.removeEventListener("pointercancel", up);
+      };
+      hd.addEventListener("pointermove", move);
+      hd.addEventListener("pointerup", up);
+      hd.addEventListener("pointercancel", up);
+    });
+    hd.addEventListener("dblclick", () => {
+      dragPos = null;
+      Object.assign(panel.style, { left: "", top: "", right: "" });
+      const r = target?.getBoundingClientRect();
+      if (r) panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
+    });
   }
 
   // --- ask AI (local Ollama via background) ---

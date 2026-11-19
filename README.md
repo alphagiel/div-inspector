@@ -12,6 +12,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 - If the element (or its parent) is a CSS grid, its cells show as purple dashed boxes and the label shows the grid size (e.g. `grid 3×2`).
 - A small label shows the tag, classes, size, and the React/Vue component name.
 - Press **S** for a docked details panel: box model, spacing, size, font, colors, border, layout, effects.
+- Drag the panel by its dark header to move it out of the way. It stays put until you double-click the header to re-dock it.
 - Press **S** again to hide it.
 - Press **C** to copy the hovered element for AI: selector, component chain, size, parent layout, non-default computed styles, and an HTML snippet as Markdown. Paste it into Claude/ChatGPT and ask for a fix.
 - Press **Esc** to turn the inspector off.
