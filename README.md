@@ -15,6 +15,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 - Drag the panel by its dark header to move it out of the way. It stays put until you double-click the header to re-dock it.
 - Click **—** in the header to minimize the panel to just its header. Click **▢** to expand it. **A** expands it too.
 - Press **S** again to hide it.
+- Can't hover a container because its children cover it? Press **↑** to jump to the parent. **↓** steps back down. The hover hint shows which parent ↑ goes to, and the **S** panel has clickable ↑/↓ buttons too.
 - Press **C** to copy the hovered element for AI: selector, component chain, size, parent layout, non-default computed styles, and an HTML snippet as Markdown. Paste it into Claude/ChatGPT and ask for a fix.
 - Press **Esc** to turn the inspector off.
 
@@ -32,6 +33,7 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 | Click icon / `Alt+Shift+D` | Toggle on/off |
 | Hover | Highlight element |
 | `S` | Show/hide details for the hovered element (locks it) |
+| `↑` / `↓` | Select parent / go back down |
 | `A` | Ask a local AI (Ollama) about the hovered element, then live-preview its CSS fixes |
 | `C` | Copy the hovered element as an AI-ready prompt |
 | `Esc` | Turn off |

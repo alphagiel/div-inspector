@@ -60,6 +60,15 @@
     .hd .min:hover { color: #fff; background: #222; }
     #panel.minimized > :not(.hd) { display: none; }
     #panel.minimized .hd { border-bottom: 0; }
+    .nav { display: flex; gap: 6px; padding: 6px 12px; border-bottom: 1px solid #1c1c1c; }
+    .nav button {
+      all: unset; cursor: pointer; flex: 1; min-width: 0;
+      padding: 4px 6px; border: 1px solid #2a2f38; border-radius: 4px;
+      color: #cfd6e0; font: 11px/1.2 ui-monospace, Menlo, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .nav button:hover:not(:disabled) { border-color: ${ACCENT}; color: #fff; }
+    .nav button:disabled { opacity: .35; cursor: default; }
     .hd small { display:block; color:#888; font-weight:400; margin-top:2px; }
     .sec { padding: 8px 12px; border-bottom: 1px solid #1c1c1c; }
     .sec h4 { margin: 0 0 6px; font-size: 11px; color: #9aa; text-transform: uppercase; letter-spacing: .06em; }
@@ -137,7 +146,7 @@
     }
     .ask .ans .pv.on { background: #16a34a; }
   </style>
-  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>↑</kbd><kbd>↓</kbd> parent/child · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
   <div id="grid"></div>
   <div id="margin" class="layer"></div>
   <div id="padding" class="layer"></div>
@@ -153,6 +162,7 @@
 
   let target = null;
   let locked = false; // true while details panel is open
+  let trail = []; // elements we climbed up from with ↑, popped by ↓
 
   const px = (v) => parseFloat(v) || 0;
   const place = (el, r) => {
@@ -169,6 +179,16 @@
     const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).filter(Boolean) : [];
     if (cls.length) s += "." + cls.slice(0, 3).join(".") + (cls.length > 3 ? "…" : "");
     return s;
+  };
+
+  // tag + first class, for tight spots like the hint and nav buttons
+  const shortLabel = (el) => {
+    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+    return el.tagName.toLowerCase() + (el.id ? "#" + el.id : cls ? "." + cls : "");
+  };
+  const parentOf = (el) => {
+    const p = el?.parentElement;
+    return p && p !== document.documentElement ? p : null;
   };
 
   // Ask the MAIN-world hook which component owns this element (sync via DOM event)
@@ -258,6 +278,8 @@
     // hint: top-right of element, same row as chip, never overlapping it
     hint.style.display = locked ? "none" : "block";
     if (!locked) {
+      const up = parentOf(target);
+      hint.textContent = ["S details", up && `↑ ${shortLabel(up)}`, trail.length && "↓ back"].filter(Boolean).join(" · ");
       const chipRight = chip.offsetLeft + chip.offsetWidth + 4;
       const left = Math.max(r.right - hint.offsetWidth, chipRight);
       hint.style.top = top + "px";
@@ -321,7 +343,11 @@
     const isGrid = cs.display.includes("grid");
 
     panel.innerHTML = `
-      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · A ask AI · C copy for AI · Esc quit</small><button class="min" title="Minimize">${minimized ? "▢" : "—"}</button></div>
+      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · ↑↓ parent/child · A ask AI · C copy for AI · Esc quit</small><button class="min" title="Minimize">${minimized ? "▢" : "—"}</button></div>
+      <div class="nav">
+        <button class="up" title="Select parent (↑)" ${parentOf(el) ? "" : "disabled"}>↑ ${parentOf(el) ? esc(shortLabel(parentOf(el))) : "parent"}</button>
+        <button class="down" title="Back down (↓)" ${trail.length ? "" : "disabled"}>↓ ${trail.length ? esc(shortLabel(trail[trail.length - 1])) : "child"}</button>
+      </div>
       <div class="ask">
         <h4><span>Ask AI (Ollama)</span><select title="Ollama model"><option>loading…</option></select></h4>
         <form><input placeholder="why is this misaligned?" autocomplete="off"><button type="submit">Ask</button></form>
@@ -379,7 +405,7 @@
         ["filter", cs.filter],
         ["cursor", cs.cursor],
       ]))}
-      <div class="ft">Div Inspector · hover = highlight · S = details · A = ask AI · C = copy</div>`;
+      <div class="ft">Div Inspector · hover = highlight · S = details · ↑↓ = parent/child · A = ask AI · C = copy</div>`;
 
     // dock opposite the element so it doesn't cover it
     panel.style.display = "block";
@@ -387,6 +413,8 @@
     if (dragPos) placePanel(dragPos.x, dragPos.y);
     else panel.classList.toggle("left", r.left + r.width / 2 > innerWidth / 2);
     wireDrag();
+    panel.querySelector(".nav .up").addEventListener("click", () => climb(true));
+    panel.querySelector(".nav .down").addEventListener("click", () => climb(false));
     setMinimized(minimized);
     wireAsk();
   }
@@ -723,11 +751,33 @@
     if (locked || isOurs(e)) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el === host || el === document.documentElement) return;
+    // after climbing with ↑, stay on the ancestor while the cursor is inside it
+    if (trail.length && target && target.contains(el)) return;
     if (el !== target) {
+      trail = [];
       target = el;
       draw();
     }
   };
+
+  // ↑ selects the parent, ↓ retraces the path back down
+  function climb(up) {
+    let next = null;
+    if (up) {
+      next = parentOf(target);
+      if (next) trail.push(target);
+    } else if (trail.length) {
+      next = trail.pop();
+    }
+    if (!next) return showFlash(up ? "Top of page" : "No child to go back to");
+    target = next;
+    if (locked) {
+      stopAsk();
+      revertAll();
+      renderPanel();
+    }
+    draw();
+  }
 
   const typing = (e) => {
     const a = e.composedPath()[0] || document.activeElement;
@@ -754,6 +804,10 @@
         renderPanel();
       }
       if (target) draw();
+    } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && target) {
+      e.preventDefault();
+      e.stopPropagation();
+      climb(e.key === "ArrowUp");
     } else if ((e.key === "c" || e.key === "C") && target) {
       e.preventDefault();
       e.stopPropagation();
