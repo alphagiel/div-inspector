@@ -16,6 +16,9 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 - Click **—** in the header to minimize the panel to just its header. Click **▢** to expand it. **A** expands it too.
 - Press **S** again to hide it.
 - Can't hover a container because its children cover it? Press **↑** to jump to the parent. **↓** steps back down. The hover hint shows which parent ↑ goes to, and the **S** panel has clickable ↑/↓ buttons too.
+- Press **F** to find text on the page. Every match gets a numbered box. **Enter** jumps to the next one and opens its details, **⇧Enter** goes back.
+- **⇧+click** two elements to select their common parent. Handy for "the box that holds both of these".
+- The **S** panel lists every parent with its size. Hover a row to preview it on the page, click to select it.
 - Press **C** to copy the hovered element for AI: selector, component chain, size, parent layout, non-default computed styles, and an HTML snippet as Markdown. Paste it into Claude/ChatGPT and ask for a fix.
 - Press **Esc** to turn the inspector off.
 
@@ -34,6 +37,8 @@ A Chrome extension for inspecting elements without a giant tooltip following you
 | Hover | Highlight element |
 | `S` | Show/hide details for the hovered element (locks it) |
 | `↑` / `↓` | Select parent / go back down |
+| `F` | Find text on the page, Enter/⇧Enter to cycle matches |
+| `⇧`+click ×2 | Select the common parent of two elements |
 | `A` | Ask a local AI (Ollama) about the hovered element, then live-preview its CSS fixes |
 | `C` | Copy the hovered element as an AI-ready prompt |
 | `Esc` | Turn off |

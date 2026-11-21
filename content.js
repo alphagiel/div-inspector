@@ -145,8 +145,55 @@
       font: 600 10px ui-monospace, Menlo, monospace; border-radius: 4px;
     }
     .ask .ans .pv.on { background: #16a34a; }
+    #box.pulse { animation: dipulse .7s ease-out 3; }
+    @keyframes dipulse {
+      0% { box-shadow: 0 0 0 0 rgba(37,99,235,.7); }
+      100% { box-shadow: 0 0 0 14px rgba(37,99,235,0); }
+    }
+    #find {
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+      width: min(440px, calc(100vw - 32px)); display: none; pointer-events: auto;
+      background: #fff; color: #1f2328; border: 1px solid ${ACCENT}; border-radius: 8px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 8px;
+      font: 12px/1.4 ui-monospace, Menlo, monospace;
+    }
+    #find.show { display: flex; align-items: center; gap: 8px; }
+    #find input {
+      flex: 1; min-width: 0; font: 13px ui-monospace, Menlo, monospace; color: #1f2328;
+      background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 5px; padding: 7px 9px; outline: none;
+    }
+    #find input:focus { border-color: ${ACCENT}; }
+    #find .count { color: #57606a; white-space: nowrap; }
+    #find .count.none { color: #c62828; }
+    #marks div {
+      position: fixed; pointer-events: none;
+      border: 2px solid #f59e0b; background: rgba(245,158,11,.14); border-radius: 2px;
+    }
+    #marks div.on { border-color: ${ACCENT}; background: rgba(37,99,235,.12); }
+    #marks b {
+      position: absolute; top: -9px; left: -9px; min-width: 16px; height: 16px; padding: 0 3px;
+      font: 700 10px/16px ui-monospace, Menlo, monospace; text-align: center;
+      color: #fff; background: #f59e0b; border-radius: 8px;
+    }
+    #marks div.on b { background: ${ACCENT}; }
+    #ghost { border: 2px dashed #f59e0b; background: rgba(245,158,11,.12); }
+    .anc { padding: 6px 12px; border-bottom: 1px solid #1c1c1c; max-height: 170px; overflow: auto; }
+    .anc h4 { margin: 0 0 4px; font-size: 11px; color: #9aa; text-transform: uppercase; letter-spacing: .06em; }
+    .anc button {
+      all: unset; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; width: 100%;
+      padding: 2px 6px; border-radius: 3px; color: #cfd6e0; font: 11px/1.5 ui-monospace, Menlo, monospace;
+    }
+    .anc button:hover { background: #1b2433; color: #fff; }
+    .anc button i { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .anc button span { color: #7c8594; flex-shrink: 0; }
+    .anc button.off { opacity: .45; }
+    .anc button u { text-decoration: none; color: #7c8594; }
+    .anc .more { color: #7c8594; font-size: 10px; padding: 2px 6px; }
   </style>
-  <div id="toast"><span>Div Inspector on · <kbd>S</kbd> details · <kbd>↑</kbd><kbd>↓</kbd> parent/child · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="toast"><span>Div Inspector on · <kbd>F</kbd> find · <kbd>S</kbd> details · <kbd>↑</kbd><kbd>↓</kbd> parent/child · <kbd>⇧</kbd>+click ×2 common parent · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="find"><input placeholder="find text… Enter = next, ⇧Enter = back" autocomplete="off"><span class="count"></span></div>
+  <div id="marks"></div>
+  <div id="ghost" class="layer"></div>
   <div id="grid"></div>
   <div id="margin" class="layer"></div>
   <div id="padding" class="layer"></div>
@@ -186,6 +233,7 @@
     const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
     return el.tagName.toLowerCase() + (el.id ? "#" + el.id : cls ? "." + cls : "");
   };
+  const NOT_LAID_OUT = /^(SCRIPT|STYLE|LINK|META|TEMPLATE|NOSCRIPT|BR)$/;
   const parentOf = (el) => {
     const p = el?.parentElement;
     return p && p !== document.documentElement ? p : null;
@@ -341,13 +389,29 @@
 
     const isFlex = cs.display.includes("flex");
     const isGrid = cs.display.includes("grid");
+    const chain = [];
+    for (let p = parentOf(el); p; p = parentOf(p)) chain.push(p);
+    const kids = [...el.children].filter((c) => !NOT_LAID_OUT.test(c.tagName));
+    // one row per element: name, size, and how many children it has
+    const rowsOf = (kind, els, indent) =>
+      els
+        .slice(0, 40)
+        .map((x, i) => {
+          const xr = x.getBoundingClientRect();
+          const off = !xr.width || !xr.height;
+          const n = x.children.length;
+          return `<button data-kind="${kind}" data-i="${i}" class="${off ? "off" : ""}" title="${esc(label(x))}"><i>${indent ? "·".repeat(Math.min(i, 8)) + " " : ""}${esc(shortLabel(x))}${kind === "kid" && n ? ` <u>▸${n}</u>` : ""}</i><span>${off ? "hidden" : `${Math.round(xr.width)}×${Math.round(xr.height)}`}</span></button>`;
+        })
+        .join("") + (els.length > 40 ? `<div class="more">+${els.length - 40} more</div>` : "");
 
     panel.innerHTML = `
-      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · ↑↓ parent/child · A ask AI · C copy for AI · Esc quit</small><button class="min" title="Minimize">${minimized ? "▢" : "—"}</button></div>
+      <div class="hd">${esc(label(el))}${componentOf(el) ? `<small style="color:#cfe">component: ${esc(componentOf(el))}</small>` : ""}<small>S hide · ↑↓ parent/child · ⇧click×2 common parent · F find · A ask AI · C copy for AI · Esc quit</small><button class="min" title="Minimize">${minimized ? "▢" : "—"}</button></div>
       <div class="nav">
         <button class="up" title="Select parent (↑)" ${parentOf(el) ? "" : "disabled"}>↑ ${parentOf(el) ? esc(shortLabel(parentOf(el))) : "parent"}</button>
         <button class="down" title="Back down (↓)" ${trail.length ? "" : "disabled"}>↓ ${trail.length ? esc(shortLabel(trail[trail.length - 1])) : "child"}</button>
       </div>
+      ${chain.length ? `<div class="anc"><h4>Parents · hover to preview</h4>${rowsOf("up", chain, true)}</div>` : ""}
+      ${kids.length ? `<div class="anc"><h4>Children (${kids.length})</h4>${rowsOf("kid", kids, false)}</div>` : ""}
       <div class="ask">
         <h4><span>Ask AI (Ollama)</span><select title="Ollama model"><option>loading…</option></select></h4>
         <form><input placeholder="why is this misaligned?" autocomplete="off"><button type="submit">Ask</button></form>
@@ -405,7 +469,7 @@
         ["filter", cs.filter],
         ["cursor", cs.cursor],
       ]))}
-      <div class="ft">Div Inspector · hover = highlight · S = details · ↑↓ = parent/child · A = ask AI · C = copy</div>`;
+      <div class="ft">Div Inspector · hover = highlight · S = details · ↑↓ = parent/child · ⇧click×2 = common parent · F = find text · A = ask AI · C = copy</div>`;
 
     // dock opposite the element so it doesn't cover it
     panel.style.display = "block";
@@ -415,6 +479,17 @@
     wireDrag();
     panel.querySelector(".nav .up").addEventListener("click", () => climb(true));
     panel.querySelector(".nav .down").addEventListener("click", () => climb(false));
+    panel.querySelectorAll(".anc button").forEach((b) => {
+      const up = b.dataset.kind === "up";
+      const x = (up ? chain : kids)[+b.dataset.i];
+      b.addEventListener("mouseenter", () => showGhost(x));
+      b.addEventListener("mouseleave", () => showGhost(null));
+      b.addEventListener("click", () =>
+        up
+          ? jumpTo(x, [...trail, ...pathUp(el, x)]) // keep ↓ working back to here
+          : jumpTo(x, trail.at(-1) === x ? trail.slice(0, -1) : []) // stepping down the trail? pop it
+      );
+    });
     setMinimized(minimized);
     wireAsk();
   }
@@ -744,6 +819,164 @@
     flashTimer = setTimeout(() => flash.classList.remove("show"), 1400);
   };
 
+  // --- find: type text, every match gets a numbered mark, Enter/Tab cycles ---
+  const findBar = $("find");
+  const findInput = findBar.querySelector("input");
+  const findCount = findBar.querySelector(".count");
+  const marks = $("marks");
+  const ghost = $("ghost");
+  let hits = [];
+  let hitAt = -1;
+
+  const shown = (el) => {
+    if (!el || host.contains(el)) return false;
+    if (el.checkVisibility && !el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const inPageOrder = (a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+
+  const ATTRS = ["aria-label", "title", "alt", "placeholder"];
+  function search(q) {
+    q = q.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const found = new Set();
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n; (n = walk.nextNode()) && found.size < 300; ) {
+      if (n.textContent.toLowerCase().includes(q)) found.add(n.parentElement);
+    }
+    for (const el of document.body.querySelectorAll(ATTRS.map((a) => `[${a}]`).join(","))) {
+      if (found.size >= 300) break;
+      if (ATTRS.some((a) => el.getAttribute(a)?.toLowerCase().includes(q))) found.add(el);
+    }
+    const list = [...found].filter(shown).sort(inPageOrder);
+    // keep the tightest match: drop any hit that wraps another hit
+    return list.filter((el) => !list.some((o) => o !== el && el.contains(o)));
+  }
+
+  function drawMarks() {
+    marks.innerHTML = hits
+      .map((el, i) => {
+        const r = el.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > innerHeight) return "";
+        return `<div class="${i === hitAt ? "on" : ""}" style="left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px"><b>${i + 1}</b></div>`;
+      })
+      .join("");
+  }
+
+  const setCount = () => {
+    const q = findInput.value.trim();
+    findCount.textContent = !q || q.length < 2 ? "" : !hits.length ? "no matches" : hitAt < 0 ? `${hits.length} found` : `${hitAt + 1}/${hits.length}`;
+    findCount.classList.toggle("none", q.length >= 2 && !hits.length);
+  };
+
+  let searchTimer;
+  findInput.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      hits = search(findInput.value);
+      hitAt = -1;
+      setCount();
+      drawMarks();
+    }, 120);
+  });
+
+  function goHit(i) {
+    if (!hits.length) return;
+    hitAt = (i + hits.length) % hits.length;
+    jumpTo(hits[hitAt]);
+    setCount();
+    // marks move with the smooth scroll
+    drawMarks();
+    setTimeout(drawMarks, 400);
+  }
+
+  findInput.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      clearTimeout(searchTimer);
+      if (hitAt < 0) hits = search(findInput.value); // typed fast, debounce not done yet
+      goHit(hitAt + (e.shiftKey ? -1 : 1));
+    } else if (e.key === "Escape") toggleFind(false);
+  });
+
+  function toggleFind(on) {
+    findBar.classList.toggle("show", on);
+    if (on) {
+      toast.classList.remove("show"); // same top strip, would overlap
+      findInput.focus();
+      findInput.select();
+    } else {
+      findInput.blur();
+      hits = [];
+      hitAt = -1;
+      marks.innerHTML = "";
+    }
+  }
+
+  // Select an element from code (find, common parent, parents list) and lock the panel on it
+  function jumpTo(el, path = []) {
+    stopAsk();
+    revertAll();
+    trail = path; // ↓ walks back down this path
+    target = el;
+    locked = true;
+    showGhost(null);
+    const r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) {
+      el.scrollIntoView({ block: r.height > innerHeight * 0.8 ? "start" : "center", behavior: "smooth" });
+    }
+    renderPanel();
+    draw();
+    box.classList.remove("pulse");
+    void box.offsetWidth; // restart animation
+    box.classList.add("pulse");
+  }
+
+  // Dashed preview box: first shift+click pick, or a hovered row in the parents list
+  let ghostEl = null;
+  function showGhost(el) {
+    ghostEl = el;
+    if (!el) return (ghost.style.display = "none");
+    place(ghost, el.getBoundingClientRect());
+  }
+
+  // Elements between `from` (exclusive) and its ancestor `to`, bottom first, for trail
+  const pathUp = (from, to) => {
+    const out = [];
+    for (let x = from; x && x !== to; x = x.parentElement) out.push(x);
+    return out;
+  };
+
+  // --- shift+click two elements -> their common parent ---
+  let firstPick = null;
+  const onDown = (e) => {
+    if (e.shiftKey && !isOurs(e)) e.preventDefault(); // no text selection
+  };
+  const onClick = (e) => {
+    if (!e.shiftKey || isOurs(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el || el === host || el === document.documentElement) return;
+    if (!firstPick || firstPick === el) {
+      firstPick = el;
+      showGhost(el);
+      return showFlash("Shift+click a 2nd element");
+    }
+    const a = firstPick;
+    firstPick = null;
+    let p = a;
+    while (p && !p.contains(el)) p = p.parentElement;
+    if (!p || p === document.documentElement) {
+      showGhost(null);
+      return showFlash("No common parent");
+    }
+    jumpTo(p, pathUp(a, p));
+    showFlash("Common parent");
+  };
+
   // --- events ---
   const isOurs = (e) => e.composedPath().includes(host);
 
@@ -812,6 +1045,10 @@
       e.preventDefault();
       e.stopPropagation();
       copyText(aiContext(target)).then((ok) => showFlash(ok ? "✓ Copied for AI" : "Copy failed"));
+    } else if (e.key === "f" || e.key === "F") {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFind(!findBar.classList.contains("show"));
     } else if ((e.key === "a" || e.key === "A") && target) {
       e.preventDefault();
       e.stopPropagation();
@@ -827,16 +1064,22 @@
 
   const onScroll = () => {
     if (target) draw();
+    if (hits.length) drawMarks();
+    if (ghostEl) showGhost(ghostEl);
   };
 
   document.addEventListener("mousemove", onMove, true);
   document.addEventListener("keydown", onKey, true);
+  document.addEventListener("mousedown", onDown, true);
+  document.addEventListener("click", onClick, true);
   window.addEventListener("scroll", onScroll, true);
   window.addEventListener("resize", onScroll);
 
   function destroy() {
     document.removeEventListener("mousemove", onMove, true);
     document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("mousedown", onDown, true);
+    document.removeEventListener("click", onClick, true);
     window.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onScroll);
     stopAsk();
