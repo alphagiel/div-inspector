@@ -91,17 +91,29 @@
     .bm .l { left:4px; } .bm .r { right:4px; }
     #toast {
       position: fixed; top: 10px; right: 16px; transform: translateY(-8px);
-      display: flex; align-items: center; gap: 10px;
-      font: 500 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      width: 230px;
+      font: 400 12.5px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: #333; background: #fff;
-      border: 1px solid #e3e3e3; border-radius: 8px; padding: 8px 8px 8px 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,.22);
+      border: 1px solid #e3e3e3; border-radius: 10px; padding: 10px 12px 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.18);
       opacity: 0; transition: opacity .2s, transform .2s; white-space: nowrap;
       pointer-events: auto;
     }
+    #toast .th {
+      display: flex; align-items: center; gap: 7px;
+      font-weight: 600; font-size: 13px; color: #111;
+      padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #eee;
+    }
+    #toast .th i { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+    #toast .th button { margin-left: auto; }
+    #toast dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 0; align-items: center; }
+    #toast dt { display: flex; gap: 3px; justify-content: flex-start; align-items: center; color: #999; font-size: 11px; }
+    #toast dd { margin: 0; color: #444; }
     #toast kbd {
-      font: 600 11px ui-monospace, Menlo, monospace;
-      background: #f2f2f2; border: 1px solid #ddd; border-radius: 3px; padding: 1px 4px;
+      display: inline-block; min-width: 14px; text-align: center;
+      font: 600 11px ui-monospace, Menlo, monospace; color: #222;
+      background: #f6f6f6; border: 1px solid #ddd; border-bottom-width: 2px;
+      border-radius: 4px; padding: 1px 4px;
     }
     #toast button {
       all: unset; cursor: pointer; color: #999; font-size: 16px; line-height: 1;
@@ -190,7 +202,18 @@
     .anc button u { text-decoration: none; color: #7c8594; }
     .anc .more { color: #7c8594; font-size: 10px; padding: 2px 6px; }
   </style>
-  <div id="toast"><span>Div Inspector on · <kbd>F</kbd> find · <kbd>S</kbd> details · <kbd>↑</kbd><kbd>↓</kbd> parent/child · <kbd>⇧</kbd>+click ×2 common parent · <kbd>A</kbd> ask AI · <kbd>C</kbd> copy · <kbd>Esc</kbd> exit</span><button title="Close">×</button></div>
+  <div id="toast">
+    <div class="th"><i></i>Div Inspector<button title="Close">×</button></div>
+    <dl>
+      <dt><kbd>S</kbd></dt><dd>Details</dd>
+      <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Parent / child</dd>
+      <dt><kbd>⇧</kbd>+ click ×2</dt><dd>Common parent</dd>
+      <dt><kbd>F</kbd></dt><dd>Find text</dd>
+      <dt><kbd>A</kbd></dt><dd>Ask AI</dd>
+      <dt><kbd>C</kbd></dt><dd>Copy</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Exit</dd>
+    </dl>
+  </div>
   <div id="find"><input placeholder="find text… Enter = next, ⇧Enter = back" autocomplete="off"><span class="count"></span></div>
   <div id="marks"></div>
   <div id="ghost" class="layer"></div>
@@ -556,6 +579,23 @@
     askPort = null;
   };
 
+  // chime when an answer finishes (Web Audio, so page CSP media-src can't block it)
+  let audioCtx = null, readyBuf = null;
+  const playReady = async () => {
+    try {
+      audioCtx ??= new AudioContext();
+      readyBuf ??= await fetch(chrome.runtime.getURL("sounds/ai-ready.mp3"))
+        .then((r) => r.arrayBuffer())
+        .then((b) => audioCtx.decodeAudioData(b));
+      const src = audioCtx.createBufferSource();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.6;
+      src.buffer = readyBuf;
+      src.connect(gain).connect(audioCtx.destination);
+      src.start();
+    } catch {}
+  };
+
   // minimal markdown: ```fences``` -> <pre>, `inline` -> <code>
   const md = (t) =>
     esc(t)
@@ -613,7 +653,10 @@
           ans.className = "ans err";
           ans.textContent = m.error;
         }
-        if (m.done && !m.error) addPreviewButtons(ans);
+        if (m.done && !m.error) {
+          addPreviewButtons(ans);
+          playReady();
+        }
         if (m.done || m.error) {
           finished = true;
           btn.disabled = false;
